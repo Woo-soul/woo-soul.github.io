@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Measurement GUI Hub</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="home-shell">
+    <header class="home-header">
+      <div>
+        <p class="eyebrow">Web Serial Measurement</p>
+        <h1>Measurement GUI Hub</h1>
+      </div>
+    </header>
+
+    <section class="project-grid" aria-label="Projects">
+      <a class="project-card active" href="./projects/bioimpedance/index.html">
+        <h2>Multi-channel Serial Plotter</h2>
+        <svg class="card-chart" viewBox="0 0 300 132" role="img" aria-label="Preview line plot">
+          <rect class="chart-bg" x="0" y="0" width="300" height="132" rx="6"></rect>
+          <g class="chart-grid">
+            <path d="M38 16V104M86 16V104M134 16V104M182 16V104M230 16V104M278 16V104"></path>
+            <path d="M38 16H278M38 38H278M38 60H278M38 82H278M38 104H278"></path>
+          </g>
+          <path class="chart-axis" d="M38 16V104H278"></path>
+          <path class="chart-line line-mag" d="M42 64C58 45 72 38 88 51S118 91 136 80S165 35 184 43S213 93 232 82S260 42 276 56"></path>
+          <path class="chart-line line-phase" d="M42 76C60 88 76 90 94 75S124 35 142 44S170 93 188 84S216 47 234 54S260 89 276 78"></path>
+          <path class="chart-line line-derived" d="M42 88C61 79 77 78 96 86S128 103 148 93S175 61 194 68S221 102 240 93S261 72 276 80"></path>
+          <text class="axis-label y-label" x="12" y="64" transform="rotate(-90 12 64)">value</text>
+          <text class="axis-label x-label" x="145" y="123">time</text>
+        </svg>
+      </a>
+
+      <article class="project-card placeholder">
+        <h2>Project Slot</h2>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
