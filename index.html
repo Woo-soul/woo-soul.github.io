@@ -17,7 +17,7 @@
 
     <section class="project-grid" aria-label="Projects">
       <a class="project-card active" href="./projects/bioimpedance/index.html">
-        <h2>Multi-channel Bioimpedance Serial Plotter</h2>
+        <h2>Time-Series Impedance Analysis</h2>
         <svg class="card-chart" viewBox="0 0 300 132" role="img" aria-label="Preview line plot">
           <rect class="chart-bg" x="0" y="0" width="300" height="132" rx="6"></rect>
           <g class="chart-grid">
@@ -33,9 +33,27 @@
         </svg>
       </a>
 
-      <article class="project-card placeholder">
-        <h2>Project Slot</h2>
-      </article>
+      <a class="project-card active response-card" href="./projects/channel-response/index.html">
+        <h2>Channel Response Impedance Analysis</h2>
+        <svg class="card-chart" viewBox="0 0 300 132" role="img" aria-label="Preview channel response plot">
+          <rect class="chart-bg" x="0" y="0" width="300" height="132" rx="6"></rect>
+          <g class="chart-grid">
+            <path d="M38 16V104M86 16V104M134 16V104M182 16V104M230 16V104M278 16V104"></path>
+            <path d="M38 16H278M38 38H278M38 60H278M38 82H278M38 104H278"></path>
+          </g>
+          <path class="chart-axis" d="M38 16V104H278"></path>
+          <path class="chart-line line-mag" d="M42 72L64 58L86 63L108 41L130 48L152 35L174 54L196 50L218 67L240 45L262 59L276 52"></path>
+          <path class="chart-line line-phase" d="M42 87L64 79L86 92L108 84L130 70L152 75L174 64L196 83L218 78L240 68L262 88L276 81"></path>
+          <g class="chart-points">
+            <circle cx="42" cy="72" r="3"></circle><circle cx="64" cy="58" r="3"></circle><circle cx="86" cy="63" r="3"></circle>
+            <circle cx="108" cy="41" r="3"></circle><circle cx="130" cy="48" r="3"></circle><circle cx="152" cy="35" r="3"></circle>
+            <circle cx="174" cy="54" r="3"></circle><circle cx="196" cy="50" r="3"></circle><circle cx="218" cy="67" r="3"></circle>
+            <circle cx="240" cy="45" r="3"></circle><circle cx="262" cy="59" r="3"></circle><circle cx="276" cy="52" r="3"></circle>
+          </g>
+          <text class="axis-label y-label" x="12" y="64" transform="rotate(-90 12 64)">value</text>
+          <text class="axis-label x-label" x="137" y="123">channel</text>
+        </svg>
+      </a>
     </section>
   </main>
 </body>

@@ -1,4 +1,4 @@
-# Multi-channel Bioimpedance Serial Plotter
+# Measurement GUI Hub
 
 Chrome 또는 Edge에서 Web Serial API로 USB Serial / UART 데이터를 직접 읽고, bioimpedance magnitude/phase 값을 실시간으로 plot하는 정적 웹앱입니다.
 
@@ -12,12 +12,15 @@ style.css                          # main hub style
 README.md
 projects/
   bioimpedance/
-    index.html                     # bioimpedance serial GUI
+    index.html                     # Time-Series Impedance Analysis
     style.css
+    app.js
+  channel-response/
+    index.html                     # Channel Response Impedance Analysis
     app.js
 ```
 
-GitHub Pages 주소로 접속하면 먼저 main hub가 열립니다. `Multi-channel Bioimpedance Serial Plotter` 카드를 누르면 실제 측정 GUI로 들어갑니다.
+GitHub Pages 주소로 접속하면 먼저 main hub가 열립니다. `Time-Series Impedance Analysis` 카드를 누르면 시간에 따른 impedance plot으로 들어가고, `Channel Response Impedance Analysis` 카드를 누르면 최신 frame의 채널별 magnitude/phase profile을 볼 수 있습니다.
 
 ## Important Architecture
 
@@ -180,10 +183,16 @@ Main hub:
 https://YOUR_ID.github.io/REPOSITORY_NAME/
 ```
 
-Bioimpedance GUI:
+Time-Series Impedance Analysis:
 
 ```text
 https://YOUR_ID.github.io/REPOSITORY_NAME/projects/bioimpedance/index.html
+```
+
+Channel Response Impedance Analysis:
+
+```text
+https://YOUR_ID.github.io/REPOSITORY_NAME/projects/channel-response/index.html
 ```
 
 GitHub Pages에서는 `/projects/bioimpedance/`도 보통 `index.html`로 열리지만, 로컬에서 파일을 직접 열 때 폴더 목록이 뜨는 일을 피하려면 `index.html`까지 명시하는 편이 안전합니다.

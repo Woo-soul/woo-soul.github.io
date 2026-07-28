@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Time-Series Impedance Analysis</title>
+  <title>Channel Response Impedance Analysis</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot/dist/uPlot.min.css">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../bioimpedance/style.css">
   <script defer src="https://cdn.jsdelivr.net/npm/uplot/dist/uPlot.iife.min.js"></script>
   <script defer src="./app.js"></script>
 </head>
@@ -17,10 +17,10 @@
           <span class="back-icon" aria-hidden="true">←</span>
           <span>Back to hub</span>
         </a>
-        <p class="eyebrow">Web Serial / UART</p>
-        <h1>Time-Series Impedance Analysis</h1>
+        <p class="eyebrow">Web Serial / Channel Profile</p>
+        <h1>Channel Response Impedance Analysis</h1>
         <p class="subtitle">
-          CSV frames from an MCU, parsed locally in Chrome or Edge and plotted in real time.
+          Latest CSV frame plotted across channels for quick magnitude and phase profile checks.
         </p>
       </div>
       <div class="connection-pill">
@@ -66,11 +66,6 @@
             <option value="interleaved" selected>interleaved</option>
             <option value="grouped">grouped</option>
           </select>
-        </label>
-
-        <label>
-          Display window seconds
-          <input id="windowSeconds" type="number" min="1" max="600" step="1" value="10">
         </label>
 
         <label>
@@ -152,55 +147,19 @@
     <section class="plots-grid">
       <article class="panel plot-card">
         <div class="plot-header">
-          <h2>Magnitude</h2>
-          <span>all channels</span>
+          <h2>Magnitude by Channel</h2>
+          <span>latest valid frame</span>
         </div>
         <div id="magnitudePlot" class="plot-box"></div>
       </article>
 
       <article class="panel plot-card">
         <div class="plot-header">
-          <h2>Phase</h2>
-          <span>all channels</span>
+          <h2>Phase by Channel</h2>
+          <span>latest valid frame</span>
         </div>
         <div id="phasePlot" class="plot-box"></div>
       </article>
-    </section>
-
-    <section class="panel formula-panel">
-      <div class="formula-header">
-        <div>
-          <h2>Formula Plot</h2>
-          <p>Build derived traces from channels, for example <code>ch1 - ch2</code> or <code>(ch1 + ch2) / 2</code>.</p>
-        </div>
-      </div>
-
-      <div class="formula-controls">
-        <label>
-          Source
-          <select id="formulaSource">
-            <option value="mag" selected>Magnitude</option>
-            <option value="phase">Phase</option>
-          </select>
-        </label>
-
-        <label class="formula-expression-field">
-          Formula
-          <input id="formulaExpression" type="text" value="ch1 - ch2" placeholder="ch1 - ch2">
-        </label>
-
-        <label>
-          Label
-          <input id="formulaLabel" type="text" placeholder="optional">
-        </label>
-
-        <button id="addFormulaBtn">Add trace</button>
-        <button id="clearFormulaBtn" class="secondary">Clear formulas</button>
-      </div>
-
-      <p id="formulaError" class="formula-error" aria-live="polite"></p>
-      <div id="formulaList" class="formula-list"></div>
-      <div id="formulaPlot" class="plot-box formula-plot"></div>
     </section>
   </main>
 </body>

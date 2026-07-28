@@ -103,6 +103,17 @@ h1 {
   background: linear-gradient(90deg, var(--accent), #2dd4bf);
 }
 
+.project-card.response-card {
+  border-color: #aebfe4;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.13), transparent 44%),
+    linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.project-card.response-card::before {
+  background: linear-gradient(90deg, #2563eb, #0f766e);
+}
+
 .project-card.placeholder {
   background:
     linear-gradient(145deg, #fbfcff 0%, #f5f7fb 100%);
@@ -162,6 +173,12 @@ h1 {
   stroke: #e11d48;
   stroke-width: 1.7;
   opacity: 0.82;
+}
+
+.chart-points circle {
+  fill: #0f766e;
+  stroke: #ffffff;
+  stroke-width: 1.2;
 }
 
 .axis-label {
