@@ -1,6 +1,6 @@
-# Measurement GUI Hub
+# Impedance Analysis
 
-Chrome 또는 Edge에서 Web Serial API로 USB Serial / UART 데이터를 직접 읽고, bioimpedance magnitude/phase 값을 실시간으로 plot하는 정적 웹앱입니다.
+Chrome 또는 Edge에서 Web Serial API로 USB Serial / UART 데이터를 직접 읽고, bioimpedance magnitude/phase 값을 time-series와 channel response로 동시에 plot하는 정적 웹앱입니다.
 
 서버, Python, Node.js 없이 정적 파일만으로 동작합니다. Plot 라이브러리는 CDN에서 uPlot을 불러옵니다.
 
@@ -12,15 +12,15 @@ style.css                          # main hub style
 README.md
 projects/
   bioimpedance/
-    index.html                     # Time-Series Impedance Analysis
+    index.html                     # Impedance Analysis
     style.css
     app.js
   channel-response/
-    index.html                     # Channel Response Impedance Analysis
-    app.js
+    index.html                     # redirects to the unified Impedance Analysis page
+    app.js                         # legacy file, not linked by the current hub
 ```
 
-GitHub Pages 주소로 접속하면 먼저 main hub가 열립니다. `Time-Series Impedance Analysis` 카드를 누르면 시간에 따른 impedance plot으로 들어가고, `Channel Response Impedance Analysis` 카드를 누르면 최신 frame의 채널별 magnitude/phase profile을 볼 수 있습니다.
+GitHub Pages 주소로 접속하면 먼저 main hub가 열립니다. `Impedance Analysis` 카드를 누르면 시간에 따른 impedance plot과 최신 frame의 채널별 magnitude/phase profile을 한 화면에서 볼 수 있습니다.
 
 ## Important Architecture
 
@@ -42,7 +42,7 @@ GitHub Pages는 HTML/CSS/JS 파일을 HTTPS 웹사이트로 배포할 뿐입니�
 
 MCU는 newline으로 끝나는 CSV 한 줄을 계속 출력해야 합니다.
 
-기본값은 12 channel이며, 각 channel마다 magnitude와 phase가 있습니다. 따라서 한 줄에는 `channel_count * 2`개의 숫자가 정확히 있어야 합니다.
+Channel count는 사용자가 직접 설정합니다. `Magnitude + Phase` 모드에서는 한 줄에 `channel_count * 2`개의 숫자가 필요하고, `Magnitude only` 또는 `Phase only` 모드에서는 한 줄에 `channel_count`개의 숫자가 필요합니다.
 
 기본 interleaved format:
 
@@ -77,11 +77,12 @@ Output mode:
 ```text
 top control panel
 compact serial status strip
-magnitude plot | phase plot
+time-series magnitude plot | time-series phase plot
+channel magnitude profile | channel phase profile
 formula plot
 ```
 
-Magnitude plot과 phase plot은 가로로 나란히 배치되어 한 화면에서 같이 볼 수 있습니다. 점 marker는 끄고, 수신된 sample들을 선으로 이어서 표시합니다.
+Time-series plot은 수신된 sample들을 선으로 이어서 표시하고, channel response plot은 최신 valid frame을 channel 축 기준으로 표시합니다.
 
 ## Formula Plot
 
@@ -117,11 +118,10 @@ Formula는 임의 JavaScript를 실행하지 않습니다. 앱 내부 parser가 
 
 1. Chrome 또는 Edge에서 페이지를 엽니다.
 2. Baudrate를 MCU 설정과 맞춥니다.
-3. Channel count를 실제 channel 수로 설정합니다. 기본값은 `12`입니다.
+3. Channel count를 실제 channel 수로 설정합니다. 선택 전 기본값은 비어 있습니다.
 4. Input format을 `interleaved` 또는 `grouped`로 선택합니다.
 5. Display window seconds를 설정합니다. 기본값은 최근 `10`초입니다.
-6. Expected sample rate를 설정합니다. 기본값은 `5 Hz`입니다.
-7. `Connect`를 누르고 브라우저 팝업에서 MCU가 연결된 COM port를 직접 선택합니다.
+6. `Connect`를 누르고 브라우저 팝업에서 MCU가 연결된 COM port를 직접 선택합니다.
 
 Web Serial API 보안 정책상 앱이 자동으로 COM port를 선택할 수 없습니다. 사용자가 반드시 `Connect` 버튼을 누르고 직접 port를 선택해야 합니다.
 
@@ -137,13 +137,15 @@ Baudrate 후보:
 
 Baudrate는 serial port를 열 때 적용됩니다. 연결 중 baudrate를 바꾸려면 disconnect 후 다시 connect하세요.
 
-Channel count는 실제 MCU가 출력하는 channel 수와 일치해야 합니다. 예를 들어 12 channel이면 한 줄에 24개 숫자가 있어야 합니다.
+Channel count는 실제 MCU가 출력하는 channel 수와 일치해야 합니다. 예를 들어 12 channel일 때 `Magnitude + Phase`는 24개 숫자, `Magnitude only`와 `Phase only`는 12개 숫자를 한 줄에 출력해야 합니다.
 
 ## CSV Logging
 
-`Start logging`을 누르면 이후 수신되는 valid frame이 브라우저 메모리에 저장됩니다.
+`CSV filename`에 파일명을 입력한 뒤 `Start logging`을 누르면 이후 수신되는 valid frame이 브라우저 메모리에 저장됩니다. 파일명이 비어 있으면 앱이 timestamp 기반 기본 파일명을 만듭니다.
 
-`Stop logging`을 누르면 CSV 파일이 다운로드됩니다.
+`Stop logging`을 누르면 Chrome/Edge에서는 가능한 경우 저장 대화상자가 열리고, 그렇지 않으면 입력한 파일명으로 CSV 다운로드가 시작됩니다.
+
+스톱워치는 CSV logging과 독립적으로 동작합니다. `Start stopwatch`, `Stop stopwatch`, `Reset stopwatch` 버튼으로 원하는 측정 구간 시간을 따로 잴 수 있습니다.
 
 CSV header:
 
@@ -189,13 +191,13 @@ Main hub:
 https://YOUR_ID.github.io/REPOSITORY_NAME/
 ```
 
-Time-Series Impedance Analysis:
+Impedance Analysis:
 
 ```text
 https://YOUR_ID.github.io/REPOSITORY_NAME/projects/bioimpedance/index.html
 ```
 
-Channel Response Impedance Analysis:
+Legacy Channel Response URL, redirects to Impedance Analysis:
 
 ```text
 https://YOUR_ID.github.io/REPOSITORY_NAME/projects/channel-response/index.html

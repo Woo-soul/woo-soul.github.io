@@ -14,6 +14,7 @@
     channelCount: $("channelCount"),
     inputFormat: $("inputFormat"),
     outputMode: $("outputMode"),
+    csvFilename: $("csvFilename"),
     expectedSampleRate: $("expectedSampleRate"),
     notice: $("notice"),
     statusDot: $("statusDot"),
@@ -30,6 +31,7 @@
     lastValidTime: $("lastValidTime"),
     lastByteTime: $("lastByteTime"),
     loggingStatus: $("loggingStatus"),
+    elapsedTime: $("elapsedTime"),
     lastRawLine: $("lastRawLine"),
     bufferPreview: $("bufferPreview"),
     lastInvalidReason: $("lastInvalidReason"),
@@ -65,6 +67,9 @@
     latest: null,
     receiveTimes: [],
     logging: false,
+    logFilename: "",
+    loggingStartedAtMs: null,
+    loggingElapsedMs: 0,
     logRows: [],
     magnitudePlot: null,
     phasePlot: null,
@@ -337,29 +342,37 @@
       return;
     }
 
+    state.logFilename = buildCsvFilename("channel-response");
+    dom.csvFilename.value = state.logFilename;
     state.logging = true;
+    state.loggingStartedAtMs = performance.now();
+    state.loggingElapsedMs = 0;
     state.logRows = [buildCsvHeader()];
     updateControls();
     updateStatus();
-    setNotice("Logging started. Stop logging to download a CSV file.", "ok");
+    setNotice("Logging started. Stop logging to save a CSV file.", "ok");
   }
 
-  function stopLogging() {
+  async function stopLogging() {
     if (!state.logging) return;
 
+    state.loggingElapsedMs = getLoggingElapsedMs();
+    state.loggingStartedAtMs = null;
     state.logging = false;
     const content = state.logRows.join("\n") + "\n";
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `channel-response-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const fileName = state.logFilename || buildCsvFilename("channel-response");
+    updateControls();
+    updateStatus();
+    const saveResult = await saveCsvContent(content, fileName);
 
     updateControls();
     updateStatus();
-    setNotice("Logging stopped. CSV download was triggered by the browser.", "ok");
+    setNotice(
+      saveResult === "saved"
+        ? `Logging stopped. CSV saved as ${fileName}.`
+        : `Logging stopped. CSV download started as ${fileName}.`,
+      "ok"
+    );
   }
 
   function buildCsvHeader() {
@@ -389,6 +402,10 @@
     state.bufferedChars = 0;
     state.parseErrorCount = 0;
     state.lastByteTimeMs = null;
+    if (!state.logging) {
+      state.loggingStartedAtMs = null;
+      state.loggingElapsedMs = 0;
+    }
     state.lastRawLine = "";
     state.bufferPreview = "";
     state.lastInvalidReason = "";
@@ -583,6 +600,7 @@
     dom.baudRate.disabled = state.connected;
     dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
     dom.outputMode.disabled = state.connected;
+    dom.csvFilename.disabled = state.logging;
   }
 
   function updateStatus() {
@@ -604,6 +622,8 @@
     dom.lastValidTime.textContent = state.latest ? formatClockTime(state.latest.timestampMs) : "-";
     dom.lastByteTime.textContent = state.lastByteTimeMs ? formatClockTime(state.lastByteTimeMs) : "-";
     dom.loggingStatus.textContent = state.logging ? `${Math.max(0, state.logRows.length - 1)} rows` : "Stopped";
+    dom.elapsedTime.textContent = formatElapsedTime(getLoggingElapsedMs());
+    dom.elapsedTime.classList.toggle("running", state.logging);
     dom.lastRawLine.textContent = state.lastRawLine || "(none)";
     dom.bufferPreview.textContent = state.bufferPreview || "(empty)";
     dom.lastInvalidReason.textContent = state.lastInvalidReason || "(none)";
@@ -656,6 +676,82 @@
       minute: "2-digit",
       second: "2-digit",
     });
+  }
+
+  function getLoggingElapsedMs() {
+    if (state.logging && state.loggingStartedAtMs !== null) {
+      return performance.now() - state.loggingStartedAtMs;
+    }
+    return state.loggingElapsedMs;
+  }
+
+  function formatElapsedTime(elapsedMs) {
+    const totalSeconds = Math.max(0, elapsedMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const secondsText = seconds.toFixed(1).padStart(4, "0");
+    const minutesText = String(minutes).padStart(2, "0");
+    return hours > 0 ? `${hours}:${minutesText}:${secondsText}` : `${minutesText}:${secondsText}`;
+  }
+
+  function buildCsvFilename(defaultPrefix) {
+    const rawName = sanitizeFilename(dom.csvFilename.value);
+    const baseName = rawName.replace(/\.csv$/i, "") || `${defaultPrefix}-${formatTimestampForFilename(new Date())}`;
+    return `${baseName}.csv`;
+  }
+
+  function sanitizeFilename(filename) {
+    return String(filename)
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/[. ]+$/g, "")
+      .slice(0, 120);
+  }
+
+  function formatTimestampForFilename(date) {
+    const pad = (value) => String(value).padStart(2, "0");
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      "-",
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join("");
+  }
+
+  async function saveCsvContent(content, fileName) {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+
+    if ("showSaveFilePicker" in window) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: "CSV file", accept: { "text/csv": [".csv"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return "saved";
+      } catch (error) {
+        if (error && error.name !== "AbortError") console.error(error);
+      }
+    }
+
+    downloadCsvBlob(blob, fileName);
+    return "downloaded";
+  }
+
+  function downloadCsvBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function formatChannelTick(value) {

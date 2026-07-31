@@ -219,8 +219,12 @@ button:disabled {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
+}
+
+.filename-field {
+  grid-column: span 2;
 }
 
 label {
@@ -274,6 +278,15 @@ dd {
   white-space: nowrap;
 }
 
+.timer-value {
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.timer-value.running {
+  color: var(--ok);
+}
+
 .serial-debug {
   border-top: 1px solid var(--soft);
   padding-top: 10px;
@@ -318,6 +331,15 @@ pre {
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.section-heading {
+  margin: 18px 0 10px;
+}
+
+.section-heading h2 {
+  color: var(--ink);
+  font-size: 1.05rem;
 }
 
 .plots-grid {
@@ -489,6 +511,10 @@ code {
   .status-strip,
   .formula-controls {
     grid-template-columns: 1fr;
+  }
+
+  .filename-field {
+    grid-column: auto;
   }
 
   .app-header {

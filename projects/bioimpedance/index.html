@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Time-Series Impedance Analysis</title>
+  <title>Impedance Analysis</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot/dist/uPlot.min.css">
   <link rel="stylesheet" href="./style.css">
   <script defer src="https://cdn.jsdelivr.net/npm/uplot/dist/uPlot.iife.min.js"></script>
@@ -18,7 +18,7 @@
           <span>Back to hub</span>
         </a>
         <p class="eyebrow">Web Serial / UART</p>
-        <h1>Time-Series Impedance Analysis</h1>
+        <h1>Impedance Analysis</h1>
         <p class="subtitle">
           CSV frames from an MCU, parsed locally in Chrome or Edge and plotted in real time.
         </p>
@@ -41,6 +41,9 @@
         <button id="clearBtn" class="secondary">Clear</button>
         <button id="startLoggingBtn" class="secondary">Start logging</button>
         <button id="stopLoggingBtn" class="secondary" disabled>Stop logging</button>
+        <button id="startStopwatchBtn" class="secondary">Start stopwatch</button>
+        <button id="stopStopwatchBtn" class="secondary" disabled>Stop stopwatch</button>
+        <button id="resetStopwatchBtn" class="secondary" disabled>Reset stopwatch</button>
       </div>
 
       <div class="settings-grid">
@@ -77,14 +80,14 @@
           </select>
         </label>
 
-        <label>
-          Display window seconds
-          <input id="windowSeconds" type="number" min="1" max="600" step="1" value="10">
+        <label class="filename-field">
+          CSV filename
+          <input id="csvFilename" type="text" placeholder="bioimpedance-run">
         </label>
 
         <label>
-          Expected sample rate
-          <input id="expectedSampleRate" type="number" min="0.1" max="1000" step="0.1" value="5">
+          Display window seconds
+          <input id="windowSeconds" type="number" min="1" max="600" step="1" value="10">
         </label>
       </div>
 
@@ -137,6 +140,10 @@
           <dt>Logging</dt>
           <dd id="loggingStatus">Stopped</dd>
         </div>
+        <div>
+          <dt>Stopwatch</dt>
+          <dd id="elapsedTime" class="timer-value">00:00.0</dd>
+        </div>
       </dl>
 
       <details class="serial-debug">
@@ -157,6 +164,10 @@
         </div>
       </details>
     </section>
+
+    <div class="section-heading">
+      <h2>Time-Series</h2>
+    </div>
 
     <section class="plots-grid">
       <article class="panel plot-card">
@@ -179,6 +190,28 @@
           </label>
         </div>
         <div id="phasePlot" class="plot-box"></div>
+      </article>
+    </section>
+
+    <div class="section-heading">
+      <h2>Channel Response</h2>
+    </div>
+
+    <section class="plots-grid">
+      <article class="panel plot-card">
+        <div class="plot-header">
+          <h2>Magnitude by Channel</h2>
+          <span>latest valid frame</span>
+        </div>
+        <div id="profileMagnitudePlot" class="plot-box"></div>
+      </article>
+
+      <article class="panel plot-card">
+        <div class="plot-header">
+          <h2>Phase by Channel</h2>
+          <span>latest valid frame</span>
+        </div>
+        <div id="profilePhasePlot" class="plot-box"></div>
       </article>
     </section>
 

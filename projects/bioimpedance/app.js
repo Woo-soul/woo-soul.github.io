@@ -10,12 +10,15 @@
     clearBtn: $("clearBtn"),
     startLoggingBtn: $("startLoggingBtn"),
     stopLoggingBtn: $("stopLoggingBtn"),
+    startStopwatchBtn: $("startStopwatchBtn"),
+    stopStopwatchBtn: $("stopStopwatchBtn"),
+    resetStopwatchBtn: $("resetStopwatchBtn"),
     baudRate: $("baudRate"),
     channelCount: $("channelCount"),
     inputFormat: $("inputFormat"),
     outputMode: $("outputMode"),
+    csvFilename: $("csvFilename"),
     windowSeconds: $("windowSeconds"),
-    expectedSampleRate: $("expectedSampleRate"),
     notice: $("notice"),
     statusDot: $("statusDot"),
     connectionStatus: $("connectionStatus"),
@@ -31,11 +34,14 @@
     lastValidTime: $("lastValidTime"),
     lastByteTime: $("lastByteTime"),
     loggingStatus: $("loggingStatus"),
+    elapsedTime: $("elapsedTime"),
     lastRawLine: $("lastRawLine"),
     bufferPreview: $("bufferPreview"),
     lastInvalidReason: $("lastInvalidReason"),
     magnitudePlot: $("magnitudePlot"),
     phasePlot: $("phasePlot"),
+    profileMagnitudePlot: $("profileMagnitudePlot"),
+    profilePhasePlot: $("profilePhasePlot"),
     magnitudeAllChannels: $("magnitudeAllChannels"),
     phaseAllChannels: $("phaseAllChannels"),
     formulaSource: $("formulaSource"),
@@ -67,7 +73,6 @@
     inputFormat: "interleaved",
     outputMode: "both",
     windowSeconds: 10,
-    expectedSampleRate: 5,
     frameCount: 0,
     byteCount: 0,
     rawLineCount: 0,
@@ -81,9 +86,15 @@
     receiveTimes: [],
     latest: null,
     logging: false,
+    logFilename: "",
+    stopwatchRunning: false,
+    stopwatchStartedAtMs: null,
+    stopwatchElapsedMs: 0,
     logRows: [],
     magnitudePlot: null,
     phasePlot: null,
+    profileMagnitudePlot: null,
+    profilePhasePlot: null,
     formulaPlot: null,
     formulas: [],
     nextFormulaId: 1,
@@ -104,7 +115,7 @@
     renderFormulaList();
     updateControls();
     updateStatus();
-    window.setInterval(refreshRuntimeStatus, 500);
+    window.setInterval(refreshRuntimeStatus, 100);
     requestAnimationFrame(plotLoop);
 
     if (!("serial" in navigator)) {
@@ -123,6 +134,9 @@
     dom.clearBtn.addEventListener("click", () => clearRuntimeData());
     dom.startLoggingBtn.addEventListener("click", startLogging);
     dom.stopLoggingBtn.addEventListener("click", stopLogging);
+    dom.startStopwatchBtn.addEventListener("click", startStopwatch);
+    dom.stopStopwatchBtn.addEventListener("click", stopStopwatch);
+    dom.resetStopwatchBtn.addEventListener("click", resetStopwatch);
     dom.addFormulaBtn.addEventListener("click", addFormula);
     dom.clearFormulaBtn.addEventListener("click", clearFormulas);
     dom.magnitudeAllChannels.addEventListener("change", () => toggleAllChannels("mag", dom.magnitudeAllChannels.checked));
@@ -148,7 +162,7 @@
       });
     }
 
-    for (const control of [dom.windowSeconds, dom.expectedSampleRate]) {
+    for (const control of [dom.windowSeconds]) {
       control.addEventListener("change", () => {
         applySettingsFromControls();
         resizePlots();
@@ -451,29 +465,60 @@
       return;
     }
 
+    state.logFilename = buildCsvFilename("bioimpedance");
+    dom.csvFilename.value = state.logFilename;
     state.logging = true;
     state.logRows = [buildCsvHeader()];
     updateControls();
     updateStatus();
-    setNotice("Logging started. Stop logging to download a CSV file.", "ok");
+    setNotice("Logging started. Stop logging to save a CSV file.", "ok");
   }
 
-  function stopLogging() {
+  async function stopLogging() {
     if (!state.logging) return;
 
     state.logging = false;
     const content = state.logRows.join("\n") + "\n";
-    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bioimpedance-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+    const fileName = state.logFilename || buildCsvFilename("bioimpedance");
+    updateControls();
+    updateStatus();
+    const saveResult = await saveCsvContent(content, fileName);
 
     updateControls();
     updateStatus();
-    setNotice("Logging stopped. CSV download was triggered by the browser.", "ok");
+    setNotice(
+      saveResult === "saved"
+        ? `Logging stopped. CSV saved as ${fileName}.`
+        : `Logging stopped. CSV download started as ${fileName}.`,
+      "ok"
+    );
+  }
+
+  function startStopwatch() {
+    if (state.stopwatchRunning) return;
+    state.stopwatchStartedAtMs = performance.now();
+    state.stopwatchRunning = true;
+    updateControls();
+    updateStatus();
+    setNotice("Stopwatch started.", "ok");
+  }
+
+  function stopStopwatch() {
+    if (!state.stopwatchRunning) return;
+    state.stopwatchElapsedMs = getStopwatchElapsedMs();
+    state.stopwatchStartedAtMs = null;
+    state.stopwatchRunning = false;
+    updateControls();
+    updateStatus();
+    setNotice("Stopwatch stopped.", "ok");
+  }
+
+  function resetStopwatch() {
+    state.stopwatchElapsedMs = 0;
+    state.stopwatchStartedAtMs = state.stopwatchRunning ? performance.now() : null;
+    updateControls();
+    updateStatus();
+    setNotice("Stopwatch reset.", "ok");
   }
 
   function buildCsvHeader() {
@@ -530,12 +575,10 @@
     state.inputFormat = dom.inputFormat.value === "grouped" ? "grouped" : "interleaved";
     state.outputMode = ["both", "mag", "phase"].includes(dom.outputMode.value) ? dom.outputMode.value : "both";
     state.windowSeconds = readNumber(dom.windowSeconds.value, 10, 1, 600);
-    state.expectedSampleRate = readNumber(dom.expectedSampleRate.value, 5, 0.1, 1000);
 
     dom.channelCount.value = state.channelCount === null ? "" : String(state.channelCount);
     dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
     dom.windowSeconds.value = state.windowSeconds;
-    dom.expectedSampleRate.value = state.expectedSampleRate;
   }
 
   function readNumber(raw, fallback, min, max) {
@@ -565,6 +608,8 @@
     if (!window.uPlot) {
       dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
       dom.phasePlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
+      dom.profileMagnitudePlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
+      dom.profilePhasePlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
       dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
       updateAllChannelsControls();
       return;
@@ -573,6 +618,8 @@
     if (!hasChannelCount()) {
       dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create channel traces.</div>";
       dom.phasePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create channel traces.</div>";
+      dom.profileMagnitudePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create the channel profile.</div>";
+      dom.profilePhasePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create the channel profile.</div>";
       dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">Set Channel count before adding formulas.</div>";
       updateAllChannelsControls();
       return;
@@ -580,14 +627,18 @@
 
     if (hasMagnitude()) {
       state.magnitudePlot = createChannelPlot(dom.magnitudePlot, "mag");
+      state.profileMagnitudePlot = createProfilePlot(dom.profileMagnitudePlot, "mag");
     } else {
       dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">Magnitude data is not included in the current output mode.</div>";
+      dom.profileMagnitudePlot.innerHTML = "<div class=\"plot-empty\">Magnitude data is not included in the current output mode.</div>";
     }
 
     if (hasPhase()) {
       state.phasePlot = createChannelPlot(dom.phasePlot, "phase");
+      state.profilePhasePlot = createProfilePlot(dom.profilePhasePlot, "phase");
     } else {
       dom.phasePlot.innerHTML = "<div class=\"plot-empty\">Phase data is not included in the current output mode.</div>";
+      dom.profilePhasePlot.innerHTML = "<div class=\"plot-empty\">Phase data is not included in the current output mode.</div>";
     }
 
     renderFormulaPlot();
@@ -599,12 +650,18 @@
   function destroyPlots() {
     if (state.magnitudePlot) state.magnitudePlot.destroy();
     if (state.phasePlot) state.phasePlot.destroy();
+    if (state.profileMagnitudePlot) state.profileMagnitudePlot.destroy();
+    if (state.profilePhasePlot) state.profilePhasePlot.destroy();
     if (state.formulaPlot) state.formulaPlot.destroy();
     state.magnitudePlot = null;
     state.phasePlot = null;
+    state.profileMagnitudePlot = null;
+    state.profilePhasePlot = null;
     state.formulaPlot = null;
     dom.magnitudePlot.textContent = "";
     dom.phasePlot.textContent = "";
+    dom.profileMagnitudePlot.textContent = "";
+    dom.profilePhasePlot.textContent = "";
     dom.formulaPlot.textContent = "";
     updateAllChannelsControls();
   }
@@ -625,6 +682,22 @@
     }
 
     return new uPlot(makePlotOptions(size, unit, series), buildChannelData(kind), container);
+  }
+
+  function createProfilePlot(container, kind) {
+    const size = getPlotSize(container);
+    const isMagnitude = kind === "mag";
+    const series = [
+      { label: "channel" },
+      {
+        label: isMagnitude ? "magnitude" : "phase",
+        stroke: isMagnitude ? "#0f6b57" : "#2563eb",
+        width: 2.4,
+        points: { show: true, size: 6, width: 1.5 },
+      },
+    ];
+
+    return new uPlot(makeProfilePlotOptions(size, isMagnitude ? "magnitude" : "phase", series), buildProfileData(kind), container);
   }
 
   function renderFormulaPlot() {
@@ -687,6 +760,30 @@
     };
   }
 
+  function makeProfilePlotOptions(size, unit, series) {
+    return {
+      width: size.width,
+      height: size.height,
+      legend: { show: true },
+      cursor: { drag: { x: false, y: false } },
+      scales: {
+        x: { time: false, min: 0.5, max: state.channelCount + 0.5 },
+        y: { auto: true },
+      },
+      axes: [
+        {
+          label: "channel",
+          values: (_u, values) => values.map(formatChannelTick),
+        },
+        {
+          label: unit,
+          values: (_u, values) => values.map(formatAxisNumber),
+        },
+      ],
+      series,
+    };
+  }
+
   function plotLoop(nowMs) {
     const maxPlotHz = 15;
     const intervalMs = 1000 / maxPlotHz;
@@ -717,6 +814,16 @@
       state.phasePlot.setScale("x", { min: -state.windowSeconds, max: 0 });
     }
 
+    if (state.profileMagnitudePlot) {
+      state.profileMagnitudePlot.setData(buildProfileData("mag"));
+      state.profileMagnitudePlot.setScale("x", { min: 0.5, max: state.channelCount + 0.5 });
+    }
+
+    if (state.profilePhasePlot) {
+      state.profilePhasePlot.setData(buildProfileData("phase"));
+      state.profilePhasePlot.setScale("x", { min: 0.5, max: state.channelCount + 0.5 });
+    }
+
     if (state.formulaPlot) {
       state.formulaPlot.setData(buildFormulaData(nowSec));
       state.formulaPlot.setScale("x", { min: -state.windowSeconds, max: 0 });
@@ -733,6 +840,15 @@
     }
 
     return data;
+  }
+
+  function buildProfileData(kind) {
+    if (!hasChannelCount()) return [[], []];
+    const channels = Array.from({ length: state.channelCount }, (_value, index) => index + 1);
+    const values = state.latest
+      ? (kind === "mag" ? state.latest.mags : state.latest.phases)
+      : Array.from({ length: state.channelCount }, () => null);
+    return [channels, values];
   }
 
   function buildFormulaData(nowSec = performance.now() / 1000) {
@@ -758,6 +874,8 @@
   function resizePlots() {
     if (state.magnitudePlot) state.magnitudePlot.setSize(getPlotSize(dom.magnitudePlot));
     if (state.phasePlot) state.phasePlot.setSize(getPlotSize(dom.phasePlot));
+    if (state.profileMagnitudePlot) state.profileMagnitudePlot.setSize(getPlotSize(dom.profileMagnitudePlot));
+    if (state.profilePhasePlot) state.profilePhasePlot.setSize(getPlotSize(dom.profilePhasePlot));
     if (state.formulaPlot) state.formulaPlot.setSize(getPlotSize(dom.formulaPlot, 300));
   }
 
@@ -981,9 +1099,13 @@
     dom.pauseBtn.textContent = state.paused ? "Resume" : "Pause";
     dom.startLoggingBtn.disabled = state.logging || !channelReady;
     dom.stopLoggingBtn.disabled = !state.logging;
+    dom.startStopwatchBtn.disabled = state.stopwatchRunning;
+    dom.stopStopwatchBtn.disabled = !state.stopwatchRunning;
+    dom.resetStopwatchBtn.disabled = !state.stopwatchRunning && state.stopwatchElapsedMs === 0;
     dom.baudRate.disabled = state.connected;
     dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
     dom.outputMode.disabled = state.connected;
+    dom.csvFilename.disabled = state.logging;
     dom.addFormulaBtn.disabled = !channelReady;
     syncFormulaSourceControls();
     updateAllChannelsControls();
@@ -1008,6 +1130,8 @@
     dom.lastValidTime.textContent = state.latest ? formatClockTime(state.latest.timestampMs) : "-";
     dom.lastByteTime.textContent = state.lastByteTimeMs ? formatClockTime(state.lastByteTimeMs) : "-";
     dom.loggingStatus.textContent = state.logging ? `${Math.max(0, state.logRows.length - 1)} rows` : "Stopped";
+    dom.elapsedTime.textContent = formatElapsedTime(getStopwatchElapsedMs());
+    dom.elapsedTime.classList.toggle("running", state.stopwatchRunning);
     dom.lastRawLine.textContent = state.lastRawLine || "(none)";
     dom.bufferPreview.textContent = state.bufferPreview || "(empty)";
     dom.lastInvalidReason.textContent = state.lastInvalidReason || "(none)";
@@ -1076,6 +1200,86 @@
       minute: "2-digit",
       second: "2-digit",
     });
+  }
+
+  function formatChannelTick(value) {
+    return Number.isInteger(value) ? String(value) : "";
+  }
+
+  function getStopwatchElapsedMs() {
+    if (state.stopwatchRunning && state.stopwatchStartedAtMs !== null) {
+      return state.stopwatchElapsedMs + performance.now() - state.stopwatchStartedAtMs;
+    }
+    return state.stopwatchElapsedMs;
+  }
+
+  function formatElapsedTime(elapsedMs) {
+    const totalSeconds = Math.max(0, elapsedMs / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const secondsText = seconds.toFixed(1).padStart(4, "0");
+    const minutesText = String(minutes).padStart(2, "0");
+    return hours > 0 ? `${hours}:${minutesText}:${secondsText}` : `${minutesText}:${secondsText}`;
+  }
+
+  function buildCsvFilename(defaultPrefix) {
+    const rawName = sanitizeFilename(dom.csvFilename.value);
+    const baseName = rawName.replace(/\.csv$/i, "") || `${defaultPrefix}-${formatTimestampForFilename(new Date())}`;
+    return `${baseName}.csv`;
+  }
+
+  function sanitizeFilename(filename) {
+    return String(filename)
+      .trim()
+      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/[. ]+$/g, "")
+      .slice(0, 120);
+  }
+
+  function formatTimestampForFilename(date) {
+    const pad = (value) => String(value).padStart(2, "0");
+    return [
+      date.getFullYear(),
+      pad(date.getMonth() + 1),
+      pad(date.getDate()),
+      "-",
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join("");
+  }
+
+  async function saveCsvContent(content, fileName) {
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+
+    if ("showSaveFilePicker" in window) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: "CSV file", accept: { "text/csv": [".csv"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return "saved";
+      } catch (error) {
+        if (error && error.name !== "AbortError") console.error(error);
+      }
+    }
+
+    downloadCsvBlob(blob, fileName);
+    return "downloaded";
+  }
+
+  function downloadCsvBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function formatAxisNumber(value) {
