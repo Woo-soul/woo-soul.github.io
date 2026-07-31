@@ -219,7 +219,7 @@ button:disabled {
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
+  grid-template-columns: repeat(6, minmax(140px, 1fr));
   gap: 10px;
 }
 
@@ -334,7 +334,7 @@ pre {
 
 .plot-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
@@ -344,6 +344,28 @@ pre {
 .plot-header span {
   color: var(--muted);
   font-size: 0.8rem;
+}
+
+.channel-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.channel-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.channel-toggle input:disabled {
+  opacity: 0.5;
 }
 
 .plot-box {

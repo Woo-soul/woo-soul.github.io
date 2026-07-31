@@ -13,6 +13,7 @@
     baudRate: $("baudRate"),
     channelCount: $("channelCount"),
     inputFormat: $("inputFormat"),
+    outputMode: $("outputMode"),
     windowSeconds: $("windowSeconds"),
     expectedSampleRate: $("expectedSampleRate"),
     notice: $("notice"),
@@ -35,6 +36,8 @@
     lastInvalidReason: $("lastInvalidReason"),
     magnitudePlot: $("magnitudePlot"),
     phasePlot: $("phasePlot"),
+    magnitudeAllChannels: $("magnitudeAllChannels"),
+    phaseAllChannels: $("phaseAllChannels"),
     formulaSource: $("formulaSource"),
     formulaExpression: $("formulaExpression"),
     formulaLabel: $("formulaLabel"),
@@ -60,8 +63,9 @@
     connected: false,
     paused: false,
     baudRate: 115200,
-    channelCount: 12,
+    channelCount: null,
     inputFormat: "interleaved",
+    outputMode: "both",
     windowSeconds: 10,
     expectedSampleRate: 5,
     frameCount: 0,
@@ -83,6 +87,10 @@
     formulaPlot: null,
     formulas: [],
     nextFormulaId: 1,
+    channelVisibility: {
+      mag: true,
+      phase: true,
+    },
     needsPlotUpdate: true,
     lastPlotUpdateMs: 0,
   };
@@ -104,6 +112,7 @@
       dom.serialSupport.textContent = "Not available";
     } else {
       dom.serialSupport.textContent = "Available";
+      if (!hasChannelCount()) setNotice("Set Channel count before connecting.", "warn");
     }
   }
 
@@ -116,17 +125,26 @@
     dom.stopLoggingBtn.addEventListener("click", stopLogging);
     dom.addFormulaBtn.addEventListener("click", addFormula);
     dom.clearFormulaBtn.addEventListener("click", clearFormulas);
+    dom.magnitudeAllChannels.addEventListener("change", () => toggleAllChannels("mag", dom.magnitudeAllChannels.checked));
+    dom.phaseAllChannels.addEventListener("change", () => toggleAllChannels("phase", dom.phaseAllChannels.checked));
     dom.formulaExpression.addEventListener("keydown", (event) => {
       if (event.key === "Enter") addFormula();
     });
 
-    for (const control of [dom.channelCount, dom.inputFormat]) {
+    for (const control of [dom.channelCount, dom.inputFormat, dom.outputMode]) {
       control.addEventListener("change", () => {
         applySettingsFromControls();
         clearRuntimeData();
         clearFormulas();
+        setAllChannelsChecked(true);
         initPlots();
-        setNotice("Channel or input format changed. Data and formulas were cleared.", "warn");
+        syncFormulaSourceControls();
+        setNotice(
+          hasChannelCount()
+            ? "Channel, input format, or output mode changed. Data and formulas were cleared."
+            : "Set Channel count before connecting.",
+          "warn"
+        );
       });
     }
 
@@ -157,6 +175,12 @@
     }
 
     applySettingsFromControls();
+    if (!hasChannelCount()) {
+      setNotice("Set Channel count before connecting.", "warn");
+      updateControls();
+      updateStatus();
+      return;
+    }
 
     try {
       setNotice("Select the MCU serial port in the browser prompt.", "warn");
@@ -281,6 +305,11 @@
     const trimmed = line.trim();
     const expectedCount = getExpectedValueCount();
 
+    if (expectedCount === null) {
+      recordParseError("channel count is not set");
+      return null;
+    }
+
     if (!trimmed) {
       recordParseError("empty line");
       return null;
@@ -292,14 +321,33 @@
       return null;
     }
 
+    if (fields.some((field) => field === "")) {
+      recordParseError("line contains an empty value");
+      return null;
+    }
+
     const values = fields.map((field) => Number(field));
     if (!values.every(Number.isFinite)) {
       recordParseError("line contains text, NaN, Infinity, or -Infinity");
       return null;
     }
 
-    const mags = new Array(state.channelCount);
-    const phases = new Array(state.channelCount);
+    const mags = new Array(state.channelCount).fill(null);
+    const phases = new Array(state.channelCount).fill(null);
+
+    if (state.outputMode === "mag") {
+      for (let channel = 0; channel < state.channelCount; channel += 1) {
+        mags[channel] = values[channel];
+      }
+      return { mags, phases };
+    }
+
+    if (state.outputMode === "phase") {
+      for (let channel = 0; channel < state.channelCount; channel += 1) {
+        phases[channel] = values[channel];
+      }
+      return { mags, phases };
+    }
 
     if (state.inputFormat === "grouped") {
       for (let channel = 0; channel < state.channelCount; channel += 1) {
@@ -324,7 +372,19 @@
   }
 
   function addFormula() {
+    if (!hasChannelCount()) {
+      dom.formulaError.textContent = "Set Channel count before adding a formula.";
+      return;
+    }
+
     const source = dom.formulaSource.value === "phase" ? "phase" : "mag";
+    if (!isSourceAvailable(source)) {
+      dom.formulaError.textContent = source === "phase"
+        ? "Phase data is not included in the current output mode."
+        : "Magnitude data is not included in the current output mode.";
+      return;
+    }
+
     const expression = dom.formulaExpression.value.trim();
     const label = dom.formulaLabel.value.trim() || `${source}:${expression}`;
 
@@ -385,6 +445,12 @@
   }
 
   function startLogging() {
+    if (!hasChannelCount()) {
+      setNotice("Set Channel count before logging.", "warn");
+      updateControls();
+      return;
+    }
+
     state.logging = true;
     state.logRows = [buildCsvHeader()];
     updateControls();
@@ -413,7 +479,8 @@
   function buildCsvHeader() {
     const columns = ["timestamp_ms"];
     for (let channel = 1; channel <= state.channelCount; channel += 1) {
-      columns.push(`ch${channel}_mag`, `ch${channel}_phase`);
+      if (hasMagnitude()) columns.push(`ch${channel}_mag`);
+      if (hasPhase()) columns.push(`ch${channel}_phase`);
     }
     return columns.join(",");
   }
@@ -421,7 +488,8 @@
   function formatCsvRow(sample) {
     const values = [sample.timestampMs];
     for (let channel = 0; channel < state.channelCount; channel += 1) {
-      values.push(sample.mags[channel], sample.phases[channel]);
+      if (hasMagnitude()) values.push(sample.mags[channel]);
+      if (hasPhase()) values.push(sample.phases[channel]);
     }
     return values.join(",");
   }
@@ -458,12 +526,14 @@
 
   function applySettingsFromControls() {
     state.baudRate = readNumber(dom.baudRate.value, 115200, 1, 4000000);
-    state.channelCount = Math.round(readNumber(dom.channelCount.value, 12, 1, 128));
+    state.channelCount = readOptionalInteger(dom.channelCount.value, 1, 128);
     state.inputFormat = dom.inputFormat.value === "grouped" ? "grouped" : "interleaved";
+    state.outputMode = ["both", "mag", "phase"].includes(dom.outputMode.value) ? dom.outputMode.value : "both";
     state.windowSeconds = readNumber(dom.windowSeconds.value, 10, 1, 600);
     state.expectedSampleRate = readNumber(dom.expectedSampleRate.value, 5, 0.1, 1000);
 
-    dom.channelCount.value = state.channelCount;
+    dom.channelCount.value = state.channelCount === null ? "" : String(state.channelCount);
+    dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
     dom.windowSeconds.value = state.windowSeconds;
     dom.expectedSampleRate.value = state.expectedSampleRate;
   }
@@ -472,6 +542,13 @@
     const value = Number(raw);
     if (!Number.isFinite(value)) return fallback;
     return Math.min(max, Math.max(min, value));
+  }
+
+  function readOptionalInteger(raw, min, max) {
+    if (String(raw).trim() === "") return null;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return null;
+    return Math.round(Math.min(max, Math.max(min, value)));
   }
 
   function pruneOldData(nowSec) {
@@ -489,12 +566,33 @@
       dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
       dom.phasePlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
       dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">uPlot CDN was not loaded. Check your network connection.</div>";
+      updateAllChannelsControls();
       return;
     }
 
-    state.magnitudePlot = createChannelPlot(dom.magnitudePlot, "mag");
-    state.phasePlot = createChannelPlot(dom.phasePlot, "phase");
+    if (!hasChannelCount()) {
+      dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create channel traces.</div>";
+      dom.phasePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create channel traces.</div>";
+      dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">Set Channel count before adding formulas.</div>";
+      updateAllChannelsControls();
+      return;
+    }
+
+    if (hasMagnitude()) {
+      state.magnitudePlot = createChannelPlot(dom.magnitudePlot, "mag");
+    } else {
+      dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">Magnitude data is not included in the current output mode.</div>";
+    }
+
+    if (hasPhase()) {
+      state.phasePlot = createChannelPlot(dom.phasePlot, "phase");
+    } else {
+      dom.phasePlot.innerHTML = "<div class=\"plot-empty\">Phase data is not included in the current output mode.</div>";
+    }
+
     renderFormulaPlot();
+    applyAllChannelsVisibility();
+    updateAllChannelsControls();
     requestPlotUpdate();
   }
 
@@ -508,6 +606,7 @@
     dom.magnitudePlot.textContent = "";
     dom.phasePlot.textContent = "";
     dom.formulaPlot.textContent = "";
+    updateAllChannelsControls();
   }
 
   function createChannelPlot(container, kind) {
@@ -534,6 +633,16 @@
     dom.formulaPlot.textContent = "";
 
     if (!window.uPlot) return;
+
+    if (!hasChannelCount()) {
+      dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">Set Channel count before adding formulas.</div>";
+      return;
+    }
+
+    if (!hasMagnitude() && !hasPhase()) {
+      dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">Select an output mode with data before adding formulas.</div>";
+      return;
+    }
 
     if (state.formulas.length === 0) {
       dom.formulaPlot.innerHTML = "<div class=\"plot-empty\">Add a formula such as ch1 - ch2 to plot a derived trace.</div>";
@@ -593,15 +702,20 @@
   }
 
   function updatePlots() {
-    if (!state.magnitudePlot || !state.phasePlot) return;
+    if (!hasChannelCount()) return;
 
     const nowSec = performance.now() / 1000;
     pruneOldData(nowSec);
 
-    state.magnitudePlot.setData(buildChannelData("mag", nowSec));
-    state.phasePlot.setData(buildChannelData("phase", nowSec));
-    state.magnitudePlot.setScale("x", { min: -state.windowSeconds, max: 0 });
-    state.phasePlot.setScale("x", { min: -state.windowSeconds, max: 0 });
+    if (state.magnitudePlot) {
+      state.magnitudePlot.setData(buildChannelData("mag", nowSec));
+      state.magnitudePlot.setScale("x", { min: -state.windowSeconds, max: 0 });
+    }
+
+    if (state.phasePlot) {
+      state.phasePlot.setData(buildChannelData("phase", nowSec));
+      state.phasePlot.setScale("x", { min: -state.windowSeconds, max: 0 });
+    }
 
     if (state.formulaPlot) {
       state.formulaPlot.setData(buildFormulaData(nowSec));
@@ -657,6 +771,36 @@
 
   function requestPlotUpdate() {
     state.needsPlotUpdate = true;
+  }
+
+  function setAllChannelsChecked(checked) {
+    dom.magnitudeAllChannels.checked = checked;
+    dom.phaseAllChannels.checked = checked;
+    state.channelVisibility.mag = checked;
+    state.channelVisibility.phase = checked;
+  }
+
+  function toggleAllChannels(kind, visible) {
+    state.channelVisibility[kind] = visible;
+    const plot = kind === "mag" ? state.magnitudePlot : state.phasePlot;
+    setPlotChannelsVisible(plot, visible);
+  }
+
+  function applyAllChannelsVisibility() {
+    setPlotChannelsVisible(state.magnitudePlot, state.channelVisibility.mag);
+    setPlotChannelsVisible(state.phasePlot, state.channelVisibility.phase);
+  }
+
+  function setPlotChannelsVisible(plot, visible) {
+    if (!plot || !hasChannelCount()) return;
+    for (let seriesIndex = 1; seriesIndex < plot.series.length; seriesIndex += 1) {
+      plot.setSeries(seriesIndex, { show: visible });
+    }
+  }
+
+  function updateAllChannelsControls() {
+    dom.magnitudeAllChannels.disabled = !(hasChannelCount() && !!state.magnitudePlot && hasMagnitude());
+    dom.phaseAllChannels.disabled = !(hasChannelCount() && !!state.phasePlot && hasPhase());
   }
 
   function compileFormula(expression, channelCount) {
@@ -830,13 +974,19 @@
 
   function updateControls() {
     const serialSupported = "serial" in navigator;
-    dom.connectBtn.disabled = !serialSupported || state.connected;
+    const channelReady = hasChannelCount();
+    dom.connectBtn.disabled = !serialSupported || state.connected || !channelReady;
     dom.disconnectBtn.disabled = !state.connected;
     dom.pauseBtn.disabled = !state.connected;
     dom.pauseBtn.textContent = state.paused ? "Resume" : "Pause";
-    dom.startLoggingBtn.disabled = state.logging;
+    dom.startLoggingBtn.disabled = state.logging || !channelReady;
     dom.stopLoggingBtn.disabled = !state.logging;
     dom.baudRate.disabled = state.connected;
+    dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
+    dom.outputMode.disabled = state.connected;
+    dom.addFormulaBtn.disabled = !channelReady;
+    syncFormulaSourceControls();
+    updateAllChannelsControls();
   }
 
   function updateStatus() {
@@ -853,7 +1003,8 @@
     dom.bufferedChars.textContent = String(state.bufferedChars);
     dom.parseErrorCount.textContent = String(state.parseErrorCount);
     dom.actualRate.textContent = `${rateHz.toFixed(2)} Hz`;
-    dom.expectedValues.textContent = String(getExpectedValueCount());
+    const expectedValueCount = getExpectedValueCount();
+    dom.expectedValues.textContent = expectedValueCount === null ? "-" : String(expectedValueCount);
     dom.lastValidTime.textContent = state.latest ? formatClockTime(state.latest.timestampMs) : "-";
     dom.lastByteTime.textContent = state.lastByteTimeMs ? formatClockTime(state.lastByteTimeMs) : "-";
     dom.loggingStatus.textContent = state.logging ? `${Math.max(0, state.logRows.length - 1)} rows` : "Stopped";
@@ -878,7 +1029,39 @@
   }
 
   function getExpectedValueCount() {
-    return state.channelCount * 2;
+    if (!hasChannelCount()) return null;
+    return state.channelCount * getValuesPerChannel();
+  }
+
+  function hasChannelCount() {
+    return Number.isInteger(state.channelCount) && state.channelCount >= 1;
+  }
+
+  function getValuesPerChannel() {
+    return state.outputMode === "both" ? 2 : 1;
+  }
+
+  function hasMagnitude() {
+    return state.outputMode === "both" || state.outputMode === "mag";
+  }
+
+  function hasPhase() {
+    return state.outputMode === "both" || state.outputMode === "phase";
+  }
+
+  function isSourceAvailable(source) {
+    return source === "phase" ? hasPhase() : hasMagnitude();
+  }
+
+  function syncFormulaSourceControls() {
+    const magnitudeOption = dom.formulaSource.querySelector("option[value=\"mag\"]");
+    const phaseOption = dom.formulaSource.querySelector("option[value=\"phase\"]");
+    if (magnitudeOption) magnitudeOption.disabled = !hasMagnitude();
+    if (phaseOption) phaseOption.disabled = !hasPhase();
+
+    if (!isSourceAvailable(dom.formulaSource.value)) {
+      dom.formulaSource.value = hasMagnitude() ? "mag" : "phase";
+    }
   }
 
   function setNotice(message, type = "ok") {

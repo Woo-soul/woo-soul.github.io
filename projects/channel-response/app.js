@@ -13,6 +13,7 @@
     baudRate: $("baudRate"),
     channelCount: $("channelCount"),
     inputFormat: $("inputFormat"),
+    outputMode: $("outputMode"),
     expectedSampleRate: $("expectedSampleRate"),
     notice: $("notice"),
     statusDot: $("statusDot"),
@@ -48,8 +49,9 @@
     connected: false,
     paused: false,
     baudRate: 115200,
-    channelCount: 12,
+    channelCount: null,
     inputFormat: "interleaved",
+    outputMode: "both",
     expectedSampleRate: 5,
     frameCount: 0,
     byteCount: 0,
@@ -86,6 +88,7 @@
       dom.serialSupport.textContent = "Not available";
     } else {
       dom.serialSupport.textContent = "Available";
+      if (!hasChannelCount()) setNotice("Set Channel count before connecting.", "warn");
     }
   }
 
@@ -97,12 +100,17 @@
     dom.startLoggingBtn.addEventListener("click", startLogging);
     dom.stopLoggingBtn.addEventListener("click", stopLogging);
 
-    for (const control of [dom.channelCount, dom.inputFormat]) {
+    for (const control of [dom.channelCount, dom.inputFormat, dom.outputMode]) {
       control.addEventListener("change", () => {
         applySettingsFromControls();
         clearRuntimeData();
         initPlots();
-        setNotice("Channel or input format changed. Profile data was cleared.", "warn");
+        setNotice(
+          hasChannelCount()
+            ? "Channel, input format, or output mode changed. Profile data was cleared."
+            : "Set Channel count before connecting.",
+          "warn"
+        );
       });
     }
 
@@ -129,6 +137,12 @@
     }
 
     applySettingsFromControls();
+    if (!hasChannelCount()) {
+      setNotice("Set Channel count before connecting.", "warn");
+      updateControls();
+      updateStatus();
+      return;
+    }
 
     try {
       setNotice("Select the MCU serial port in the browser prompt.", "warn");
@@ -250,6 +264,11 @@
     const trimmed = line.trim();
     const expectedCount = getExpectedValueCount();
 
+    if (expectedCount === null) {
+      recordParseError("channel count is not set");
+      return null;
+    }
+
     if (!trimmed) {
       recordParseError("empty line");
       return null;
@@ -272,8 +291,22 @@
       return null;
     }
 
-    const mags = new Array(state.channelCount);
-    const phases = new Array(state.channelCount);
+    const mags = new Array(state.channelCount).fill(null);
+    const phases = new Array(state.channelCount).fill(null);
+
+    if (state.outputMode === "mag") {
+      for (let channel = 0; channel < state.channelCount; channel += 1) {
+        mags[channel] = values[channel];
+      }
+      return { mags, phases };
+    }
+
+    if (state.outputMode === "phase") {
+      for (let channel = 0; channel < state.channelCount; channel += 1) {
+        phases[channel] = values[channel];
+      }
+      return { mags, phases };
+    }
 
     if (state.inputFormat === "grouped") {
       for (let channel = 0; channel < state.channelCount; channel += 1) {
@@ -298,6 +331,12 @@
   }
 
   function startLogging() {
+    if (!hasChannelCount()) {
+      setNotice("Set Channel count before logging.", "warn");
+      updateControls();
+      return;
+    }
+
     state.logging = true;
     state.logRows = [buildCsvHeader()];
     updateControls();
@@ -326,7 +365,8 @@
   function buildCsvHeader() {
     const columns = ["timestamp_ms"];
     for (let channel = 1; channel <= state.channelCount; channel += 1) {
-      columns.push(`ch${channel}_mag`, `ch${channel}_phase`);
+      if (hasMagnitude()) columns.push(`ch${channel}_mag`);
+      if (hasPhase()) columns.push(`ch${channel}_phase`);
     }
     return columns.join(",");
   }
@@ -334,7 +374,8 @@
   function formatCsvRow(sample) {
     const values = [sample.timestampMs];
     for (let channel = 0; channel < state.channelCount; channel += 1) {
-      values.push(sample.mags[channel], sample.phases[channel]);
+      if (hasMagnitude()) values.push(sample.mags[channel]);
+      if (hasPhase()) values.push(sample.phases[channel]);
     }
     return values.join(",");
   }
@@ -370,11 +411,13 @@
 
   function applySettingsFromControls() {
     state.baudRate = readNumber(dom.baudRate.value, 115200, 1, 4000000);
-    state.channelCount = Math.round(readNumber(dom.channelCount.value, 12, 1, 128));
+    state.channelCount = readOptionalInteger(dom.channelCount.value, 1, 128);
     state.inputFormat = dom.inputFormat.value === "grouped" ? "grouped" : "interleaved";
+    state.outputMode = ["both", "mag", "phase"].includes(dom.outputMode.value) ? dom.outputMode.value : "both";
     state.expectedSampleRate = readNumber(dom.expectedSampleRate.value, 5, 0.1, 1000);
 
-    dom.channelCount.value = state.channelCount;
+    dom.channelCount.value = state.channelCount === null ? "" : String(state.channelCount);
+    dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
     dom.expectedSampleRate.value = state.expectedSampleRate;
   }
 
@@ -382,6 +425,13 @@
     const value = Number(raw);
     if (!Number.isFinite(value)) return fallback;
     return Math.min(max, Math.max(min, value));
+  }
+
+  function readOptionalInteger(raw, min, max) {
+    if (String(raw).trim() === "") return null;
+    const value = Number(raw);
+    if (!Number.isFinite(value)) return null;
+    return Math.round(Math.min(max, Math.max(min, value)));
   }
 
   function initPlots() {
@@ -393,8 +443,24 @@
       return;
     }
 
-    state.magnitudePlot = createProfilePlot(dom.magnitudePlot, "mag");
-    state.phasePlot = createProfilePlot(dom.phasePlot, "phase");
+    if (!hasChannelCount()) {
+      dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create the channel profile.</div>";
+      dom.phasePlot.innerHTML = "<div class=\"plot-empty\">Set Channel count to create the channel profile.</div>";
+      return;
+    }
+
+    if (hasMagnitude()) {
+      state.magnitudePlot = createProfilePlot(dom.magnitudePlot, "mag");
+    } else {
+      dom.magnitudePlot.innerHTML = "<div class=\"plot-empty\">Magnitude data is not included in the current output mode.</div>";
+    }
+
+    if (hasPhase()) {
+      state.phasePlot = createProfilePlot(dom.phasePlot, "phase");
+    } else {
+      dom.phasePlot.innerHTML = "<div class=\"plot-empty\">Phase data is not included in the current output mode.</div>";
+    }
+
     requestPlotUpdate();
   }
 
@@ -461,15 +527,21 @@
   }
 
   function updatePlots() {
-    if (!state.magnitudePlot || !state.phasePlot) return;
+    if (!hasChannelCount()) return;
 
-    state.magnitudePlot.setData(buildProfileData("mag"));
-    state.phasePlot.setData(buildProfileData("phase"));
-    state.magnitudePlot.setScale("x", { min: 0.5, max: state.channelCount + 0.5 });
-    state.phasePlot.setScale("x", { min: 0.5, max: state.channelCount + 0.5 });
+    if (state.magnitudePlot) {
+      state.magnitudePlot.setData(buildProfileData("mag"));
+      state.magnitudePlot.setScale("x", { min: 0.5, max: state.channelCount + 0.5 });
+    }
+
+    if (state.phasePlot) {
+      state.phasePlot.setData(buildProfileData("phase"));
+      state.phasePlot.setScale("x", { min: 0.5, max: state.channelCount + 0.5 });
+    }
   }
 
   function buildProfileData(kind) {
+    if (!hasChannelCount()) return [[], []];
     const channels = Array.from({ length: state.channelCount }, (_value, index) => index + 1);
     const values = state.latest
       ? (kind === "mag" ? state.latest.mags : state.latest.phases)
@@ -501,13 +573,16 @@
 
   function updateControls() {
     const serialSupported = "serial" in navigator;
-    dom.connectBtn.disabled = !serialSupported || state.connected;
+    const channelReady = hasChannelCount();
+    dom.connectBtn.disabled = !serialSupported || state.connected || !channelReady;
     dom.disconnectBtn.disabled = !state.connected;
     dom.pauseBtn.disabled = !state.connected;
     dom.pauseBtn.textContent = state.paused ? "Resume" : "Pause";
-    dom.startLoggingBtn.disabled = state.logging;
+    dom.startLoggingBtn.disabled = state.logging || !channelReady;
     dom.stopLoggingBtn.disabled = !state.logging;
     dom.baudRate.disabled = state.connected;
+    dom.inputFormat.disabled = state.connected || state.outputMode !== "both";
+    dom.outputMode.disabled = state.connected;
   }
 
   function updateStatus() {
@@ -524,7 +599,8 @@
     dom.bufferedChars.textContent = String(state.bufferedChars);
     dom.parseErrorCount.textContent = String(state.parseErrorCount);
     dom.actualRate.textContent = `${rateHz.toFixed(2)} Hz`;
-    dom.expectedValues.textContent = String(getExpectedValueCount());
+    const expectedValueCount = getExpectedValueCount();
+    dom.expectedValues.textContent = expectedValueCount === null ? "-" : String(expectedValueCount);
     dom.lastValidTime.textContent = state.latest ? formatClockTime(state.latest.timestampMs) : "-";
     dom.lastByteTime.textContent = state.lastByteTimeMs ? formatClockTime(state.lastByteTimeMs) : "-";
     dom.loggingStatus.textContent = state.logging ? `${Math.max(0, state.logRows.length - 1)} rows` : "Stopped";
@@ -548,7 +624,24 @@
   }
 
   function getExpectedValueCount() {
-    return state.channelCount * 2;
+    if (!hasChannelCount()) return null;
+    return state.channelCount * getValuesPerChannel();
+  }
+
+  function hasChannelCount() {
+    return Number.isInteger(state.channelCount) && state.channelCount >= 1;
+  }
+
+  function getValuesPerChannel() {
+    return state.outputMode === "both" ? 2 : 1;
+  }
+
+  function hasMagnitude() {
+    return state.outputMode === "both" || state.outputMode === "mag";
+  }
+
+  function hasPhase() {
+    return state.outputMode === "both" || state.outputMode === "phase";
   }
 
   function setNotice(message, type = "ok") {

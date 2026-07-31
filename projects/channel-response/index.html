@@ -57,7 +57,7 @@
 
         <label>
           Channel count
-          <input id="channelCount" type="number" min="1" max="128" step="1" value="12">
+          <input id="channelCount" type="number" min="1" max="128" step="1" placeholder="-">
         </label>
 
         <label>
@@ -65,6 +65,15 @@
           <select id="inputFormat">
             <option value="interleaved" selected>interleaved</option>
             <option value="grouped">grouped</option>
+          </select>
+        </label>
+
+        <label>
+          Output mode
+          <select id="outputMode">
+            <option value="both" selected>Magnitude + Phase</option>
+            <option value="mag">Magnitude only</option>
+            <option value="phase">Phase only</option>
           </select>
         </label>
 
@@ -109,7 +118,7 @@
         </div>
         <div>
           <dt>Values / line</dt>
-          <dd id="expectedValues">24</dd>
+          <dd id="expectedValues">-</dd>
         </div>
         <div>
           <dt>Last valid</dt>

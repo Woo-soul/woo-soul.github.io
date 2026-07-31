@@ -62,6 +62,12 @@ grouped format:
 ch1_mag,ch2_mag,...,ch12_mag,ch1_phase,ch2_phase,...,ch12_phase
 ```
 
+Output mode:
+
+- `Magnitude + Phase`: 한 줄에 `channel_count * 2`개 숫자를 보냅니다. `Input format`에서 interleaved 또는 grouped를 고릅니다.
+- `Magnitude only`: 한 줄에 `channel_count`개 magnitude 숫자만 보냅니다. 예: `ch1_mag,ch2_mag,...,chN_mag`
+- `Phase only`: 한 줄에 `channel_count`개 phase 숫자만 보냅니다. 예: `ch1_phase,ch2_phase,...,chN_phase`
+
 빈 줄, header line, 문자 포함 line, 값 개수 mismatch, `NaN`, `Infinity`, `-Infinity`가 들어간 line은 invalid line으로 버리고 parsing error count만 증가시킵니다.
 
 ## GUI Layout
