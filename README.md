@@ -137,7 +137,7 @@ Baudrate 후보:
 
 Baudrate는 serial port를 열 때 적용됩니다. 연결 중 baudrate를 바꾸려면 disconnect 후 다시 connect하세요.
 
-Channel count는 실제 MCU가 출력하는 channel 수와 일치해야 합니다. 예를 들어 12 channel일 때 `Magnitude + Phase`는 24개 숫자, `Magnitude only`와 `Phase only`는 12개 숫자를 한 줄에 출력해야 합니다.
+Channel count는 실제 MCU가 출력하는 channel 수와 일치해야 하며, 앱에서는 최대 168 channel까지 설정할 수 있습니다. 예를 들어 12 channel일 때 `Magnitude + Phase`는 24개 숫자, `Magnitude only`와 `Phase only`는 12개 숫자를 한 줄에 출력해야 합니다.
 
 ## CSV Logging
 

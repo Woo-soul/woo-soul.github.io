@@ -428,7 +428,7 @@
 
   function applySettingsFromControls() {
     state.baudRate = readNumber(dom.baudRate.value, 115200, 1, 4000000);
-    state.channelCount = readOptionalInteger(dom.channelCount.value, 1, 128);
+    state.channelCount = readOptionalInteger(dom.channelCount.value, 1, 168);
     state.inputFormat = dom.inputFormat.value === "grouped" ? "grouped" : "interleaved";
     state.outputMode = ["both", "mag", "phase"].includes(dom.outputMode.value) ? dom.outputMode.value : "both";
     state.expectedSampleRate = readNumber(dom.expectedSampleRate.value, 5, 0.1, 1000);
